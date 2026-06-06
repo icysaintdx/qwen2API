@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "../components/ui/button"
-import { Trash2, Plus, RefreshCw, Bot, ShieldCheck, MailWarning, Lock } from "lucide-react"
+import { Trash2, Plus, RefreshCw, Bot, ShieldCheck, MailWarning, Lock, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { getAuthHeader } from "../lib/auth"
 import { API_BASE } from "../lib/api"
@@ -86,6 +86,9 @@ export default function AccountsPage() {
   const [registerUnlocked, setRegisterUnlocked] = useState(false)
   const [verifying, setVerifying] = useState<string | null>(null)
   const [verifyingAll, setVerifyingAll] = useState(false)
+
+  const [importing, setImporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // 邮箱+密码字段同时匹配时解锁注册功能
   useEffect(() => {
@@ -188,6 +191,49 @@ export default function AccountsPage() {
     }).catch(err => toast.error(err.message || "\u5220\u9664\u8d26\u53f7\u5931\u8d25", { id }))
   }
 
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ""
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      let items: unknown
+      try {
+        items = JSON.parse(ev.target?.result as string)
+      } catch {
+        toast.error("JSON 解析失败，请检查文件格式")
+        return
+      }
+      if (!Array.isArray(items)) {
+        toast.error("文件格式错误：期望 JSON 数组")
+        return
+      }
+      setImporting(true)
+      const id = toast.loading(`正在导入 ${items.length} 个账号...`)
+      fetch(`${API_BASE}/api/admin/accounts/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify(items),
+      }).then(res => res.json())
+        .then(data => {
+          if (data.ok) {
+            const msg = `导入完成：新增 ${data.added}，跳过 ${data.skipped}，失败 ${data.failed}`
+            if (data.failed > 0) {
+              toast.warning(msg, { id, duration: 8000 })
+            } else {
+              toast.success(msg, { id })
+            }
+            fetchAccounts()
+          } else {
+            toast.error(data.detail || "导入失败", { id })
+          }
+        })
+        .catch(() => toast.error("导入请求失败", { id }))
+        .finally(() => setImporting(false))
+    }
+    reader.readAsText(file)
+  }
+
   const handleAutoRegister = () => {
     setRegistering(true)
     const id = toast.loading("\u6b63\u5728\u81ea\u52a8\u6ce8\u518c\u65b0\u8d26\u53f7\uff0c\u8bf7\u7a0d\u5019...")
@@ -276,6 +322,11 @@ export default function AccountsPage() {
           <p className="text-muted-foreground mt-1">{"\u7edf\u4e00\u7ba1\u7406\u4e0a\u6e38\u8d26\u53f7\u6c60\uff0c\u5e76\u533a\u5206\u672a\u6fc0\u6d3b\u3001\u9650\u6d41\u3001\u5c01\u7981\u4e0e\u5931\u6548\u72b6\u6001\u3002"}</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+            {importing ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+            {importing ? "导入中..." : "批量导入 2api JSON"}
+          </Button>
+          <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
           <Button variant="secondary" onClick={handleVerifyAll} disabled={verifyingAll}>
             <ShieldCheck className={`mr-2 h-4 w-4 ${verifyingAll ? 'animate-pulse' : ''}`} /> {"\u5168\u91cf\u5de1\u68c0"}
           </Button>

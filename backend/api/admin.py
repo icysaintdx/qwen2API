@@ -168,6 +168,59 @@ async def list_accounts(request: Request):
         accs.append(d)
     return {"accounts": accs}
 
+@router.post("/accounts/import", dependencies=[Depends(verify_admin)])
+async def import_accounts(request: Request):
+    """批量导入 2api JSON 格式账号列表"""
+    import time
+    from backend.core.account_pool import Account, AccountPool
+    from backend.services.qwen_client import QwenClient
+
+    pool: AccountPool = request.app.state.account_pool
+    client: QwenClient = request.app.state.qwen_client
+
+    try:
+        items = await request.json()
+    except Exception:
+        raise HTTPException(400, detail="Invalid JSON body")
+
+    if not isinstance(items, list):
+        raise HTTPException(400, detail="期望 JSON 数组格式")
+
+    added, skipped, failed = 0, 0, 0
+    errors = []
+
+    for item in items:
+        email = item.get("email", "").strip()
+        password = item.get("password", "").strip()
+        token = item.get("token", "").strip()
+
+        if not email:
+            skipped += 1
+            continue
+
+        # 已存在则跳过
+        if any(a.email == email for a in pool.accounts):
+            skipped += 1
+            continue
+
+        if token:
+            is_valid = await client.verify_token(token)
+            if not is_valid:
+                failed += 1
+                errors.append(f"{email}: token 无效")
+                continue
+            acc = Account(email=email, password=password, token=token, source="file")
+        else:
+            # 无 token，以待激活状态导入
+            acc = Account(email=email, password=password, token="",
+                          activation_pending=True, source="file")
+
+        await pool.add(acc)
+        added += 1
+
+    return {"ok": True, "added": added, "skipped": skipped, "failed": failed, "errors": errors}
+
+
 @router.post("/accounts/register", dependencies=[Depends(verify_admin)])
 async def register_new_account(request: Request):
     """一键调用浏览器无头注册新千问账号"""
