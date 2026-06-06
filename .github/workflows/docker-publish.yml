@@ -45,8 +45,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            yujunzhixue/qwen2api
-            ghcr.io/yujunzhixue/qwen2api
+            icysaintdx/qwen2api
+            ghcr.io/icysaintdx/qwen2api
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
