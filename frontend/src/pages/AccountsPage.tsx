@@ -89,6 +89,7 @@ export default function AccountsPage() {
 
   const [importing, setImporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [verifyAllProgress, setVerifyAllProgress] = useState<{ done: number; total: number } | null>(null)
 
   // 邮箱+密码字段同时匹配时解锁注册功能
   useEffect(() => {
@@ -290,23 +291,29 @@ export default function AccountsPage() {
       .finally(() => setVerifying(null))
   }
 
-  const handleVerifyAll = () => {
+  const handleVerifyAll = async () => {
+    if (accounts.length === 0) { toast.warning("没有账号可巡检"); return }
     setVerifyingAll(true)
-    const id = toast.loading("\u6b63\u5728\u5e76\u53d1\u5de1\u68c0\u6240\u6709\u8d26\u53f7...")
-    fetch(`${API_BASE}/api/admin/verify`, {
-      method: "POST",
-      headers: getAuthHeader(),
-    }).then(res => res.json())
-      .then(data => {
-        if (data.ok) {
-          toast.success(`\u5168\u91cf\u5de1\u68c0\u5b8c\u6210\uff0c\u5e76\u53d1\u6570\uff1a${data.concurrency || 1}`, { id })
-        } else {
-          toast.error("\u5168\u91cf\u5de1\u68c0\u5931\u8d25", { id })
-        }
-        fetchAccounts()
-      })
-      .catch(() => toast.error("\u5168\u91cf\u5de1\u68c0\u8bf7\u6c42\u5931\u8d25", { id }))
-      .finally(() => setVerifyingAll(false))
+    const total = accounts.length
+    setVerifyAllProgress({ done: 0, total })
+    const id = toast.loading(`巡检进度：0 / ${total}`)
+    let valid = 0, failed = 0
+    for (let i = 0; i < accounts.length; i++) {
+      const acc = accounts[i]
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(acc.email)}/verify`, {
+          method: "POST", headers: getAuthHeader(),
+        })
+        const data = await res.json()
+        if (data.valid) valid++; else failed++
+      } catch { failed++ }
+      setVerifyAllProgress({ done: i + 1, total })
+      toast.loading(`巡检进度：${i + 1} / ${total}`, { id })
+      fetchAccounts()
+    }
+    toast.success(`巡检完成：可用 ${valid}，失败 ${failed}`, { id, duration: 8000 })
+    setVerifyingAll(false)
+    setVerifyAllProgress(null)
   }
 
   const handleActivate = (targetEmail: string) => {
@@ -342,7 +349,8 @@ export default function AccountsPage() {
           </Button>
           <input ref={fileInputRef} type="file" accept=".json" multiple className="hidden" onChange={handleImportFile} />
           <Button variant="secondary" onClick={handleVerifyAll} disabled={verifyingAll}>
-            <ShieldCheck className={`mr-2 h-4 w-4 ${verifyingAll ? 'animate-pulse' : ''}`} /> {"\u5168\u91cf\u5de1\u68c0"}
+            <ShieldCheck className={`mr-2 h-4 w-4 ${verifyingAll ? 'animate-spin' : ''}`} />
+            {verifyingAll && verifyAllProgress ? `巡检中 ${verifyAllProgress.done}/${verifyAllProgress.total}` : "全量巡检"}
           </Button>
           <Button variant="outline" onClick={() => { fetchAccounts(); toast.success("\u8d26\u53f7\u5217\u8868\u5df2\u5237\u65b0") }}>
             <RefreshCw className="mr-2 h-4 w-4" /> {"\u5237\u65b0\u72b6\u6001"}
