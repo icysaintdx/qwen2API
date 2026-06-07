@@ -204,11 +204,7 @@ async def import_accounts(request: Request):
             continue
 
         if token:
-            is_valid = await client.verify_token(token)
-            if not is_valid:
-                failed += 1
-                errors.append(f"{email}: token 无效")
-                continue
+            # 有 token 直接信任入池，不做预验证（验证可能因网络/WAF误判）
             acc = Account(email=email, password=password, token=token, source="file")
         else:
             # 无 token，以待激活状态导入

@@ -192,24 +192,38 @@ export default function AccountsPage() {
   }
 
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
     e.target.value = ""
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      let items: unknown
-      try {
-        items = JSON.parse(ev.target?.result as string)
-      } catch {
-        toast.error("JSON 解析失败，请检查文件格式")
-        return
+
+    const readAll = files.map(file => new Promise<unknown[]>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        try {
+          const parsed = JSON.parse(ev.target?.result as string)
+          if (!Array.isArray(parsed)) { reject(new Error(`${file.name}: 期望 JSON 数组`)); return }
+          resolve(parsed)
+        } catch { reject(new Error(`${file.name}: JSON 解析失败`)) }
       }
-      if (!Array.isArray(items)) {
-        toast.error("文件格式错误：期望 JSON 数组")
+      reader.readAsText(file)
+    }))
+
+    Promise.allSettled(readAll).then(results => {
+      const items: unknown[] = []
+      let parseErrorCount = 0
+      results.forEach((r, i) => {
+        if (r.status === "fulfilled") items.push(...r.value)
+        else {
+          parseErrorCount++
+          toast.warning(`${files[i].name}: ${r.reason?.message || "解析失败"}`, { duration: 6000 })
+        }
+      })
+      if (items.length === 0) {
+        toast.error(`没有可导入的账号数据（${parseErrorCount} 个文件解析失败）`)
         return
       }
       setImporting(true)
-      const id = toast.loading(`正在导入 ${items.length} 个账号...`)
+      const id = toast.loading(`正在导入 ${items.length} 个账号（${files.length} 个文件）...`)
       fetch(`${API_BASE}/api/admin/accounts/import`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
@@ -217,8 +231,9 @@ export default function AccountsPage() {
       }).then(res => res.json())
         .then(data => {
           if (data.ok) {
-            const msg = `导入完成：新增 ${data.added}，跳过 ${data.skipped}，失败 ${data.failed}`
-            if (data.failed > 0) {
+            const totalFailed = data.failed + parseErrorCount
+            const msg = `导入完成：新增 ${data.added}，跳过 ${data.skipped}，失败 ${totalFailed}${parseErrorCount > 0 ? `（含 ${parseErrorCount} 个文件解析失败）` : ""}`
+            if (totalFailed > 0) {
               toast.warning(msg, { id, duration: 8000 })
             } else {
               toast.success(msg, { id })
@@ -230,8 +245,7 @@ export default function AccountsPage() {
         })
         .catch(() => toast.error("导入请求失败", { id }))
         .finally(() => setImporting(false))
-    }
-    reader.readAsText(file)
+    })
   }
 
   const handleAutoRegister = () => {
@@ -326,7 +340,7 @@ export default function AccountsPage() {
             {importing ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
             {importing ? "导入中..." : "批量导入 2api JSON"}
           </Button>
-          <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
+          <input ref={fileInputRef} type="file" accept=".json" multiple className="hidden" onChange={handleImportFile} />
           <Button variant="secondary" onClick={handleVerifyAll} disabled={verifyingAll}>
             <ShieldCheck className={`mr-2 h-4 w-4 ${verifyingAll ? 'animate-pulse' : ''}`} /> {"\u5168\u91cf\u5de1\u68c0"}
           </Button>

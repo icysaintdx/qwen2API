@@ -14,10 +14,10 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
-      '/api':       { target: 'http://localhost:7860', changeOrigin: true, timeout: 0 },
-      '/v1':        { target: 'http://localhost:7860', changeOrigin: true, timeout: 0 },
-      '/anthropic': { target: 'http://localhost:7860', changeOrigin: true, timeout: 0 },
-      '/v1beta':    { target: 'http://localhost:7860', changeOrigin: true, timeout: 0 },
+      '/api':       { target: 'http://127.0.0.1:7860', changeOrigin: true, timeout: 0 },
+      '/v1':        { target: 'http://127.0.0.1:7860', changeOrigin: true, timeout: 0 },
+      '/anthropic': { target: 'http://127.0.0.1:7860', changeOrigin: true, timeout: 0 },
+      '/v1beta':    { target: 'http://127.0.0.1:7860', changeOrigin: true, timeout: 0 },
     }
   }
 })
