@@ -382,7 +382,9 @@ class QwenClient:
 
         first = await self.verify_token_detail(before_token)
         result.update({k: first.get(k) for k in ("valid", "status_code", "status_text", "error", "upstream_status")})
-        if first.get("valid") and first.get("status_code") == "valid":
+        if first.get("valid"):
+            # valid=True 包含 status_code=="valid" 和 status_code=="unknown"（WAF拦截）两种情况
+            # WAF 拦截不代表 token 失效，不应触发浏览器刷新
             self._mark_account_valid(acc, "官网 token 验证通过")
             await self.account_pool.save()
             self.account_pool._reset_concurrency_limits()

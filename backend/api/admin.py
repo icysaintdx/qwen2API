@@ -203,13 +203,8 @@ async def import_accounts(request: Request):
             skipped += 1
             continue
 
-        if token:
-            # 有 token 直接信任入池，不做预验证（验证可能因网络/WAF误判）
-            acc = Account(email=email, password=password, token=token, source="file")
-        else:
-            # 无 token，以待激活状态导入
-            acc = Account(email=email, password=password, token="",
-                          activation_pending=True, source="file")
+        # 有无 token 都直接入池，valid=True；无 token 时验证会自动触发浏览器刷新
+        acc = Account(email=email, password=password, token=token, source="file")
 
         await pool.add(acc)
         added += 1
