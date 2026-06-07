@@ -251,7 +251,7 @@ async def verify_all_accounts(request: Request):
 
     results = []
     for acc in pool.accounts:
-        results.append(await client.verify_account(acc))
+        results.append(await client.verify_account(acc, allow_refresh=False))
 
     summary = {
         "total": len(results),

@@ -360,12 +360,14 @@ class QwenClient:
             acc.activation_pending = False
         acc.consecutive_failures += 1
 
-    async def verify_account(self, acc) -> dict:
+    async def verify_account(self, acc, allow_refresh: bool = True) -> dict:
         """Verify an account against chat.qwen.ai and refresh expired tokens.
 
         Flow: probe current token on official site -> if expired and password exists,
         open browser login to refresh token -> probe the refreshed token again. Only
         explicit banned/disabled responses are reported as banned.
+
+        allow_refresh=False 时跳过浏览器刷新，只做 HTTP 校验（适合全量巡检）。
         """
         before_token = acc.token or ""
         result = {
@@ -397,7 +399,7 @@ class QwenClient:
             result.update({"valid": False, "status_code": "banned", "status_text": "封禁"})
             return result
 
-        if acc.password and self.auth_resolver is not None:
+        if allow_refresh and acc.password and self.auth_resolver is not None:
             log.info(f"[校验] {acc.email} token 不可用/过期，正在打开官网登录刷新 token...")
             result["refresh_attempted"] = True
             refresh_ok = await self.auth_resolver.refresh_token(acc)
